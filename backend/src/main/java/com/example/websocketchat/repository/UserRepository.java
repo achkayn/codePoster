@@ -14,6 +14,7 @@ public interface UserRepository extends MongoRepository<User, String> {
 
     List<User> findByWaitingroomId(String waitingroomId);
     List<User> findByReady(boolean ready);
+    List<User> findByReadyAndWaitingroomId(boolean ready, String waitingroomId);
     User findOneByWaitingroomId(String waitingroomId);
     User findOneBySessionId(String sessionId);
     User findByUsernameAndWaitingroomId(String username,String waitingroomId);

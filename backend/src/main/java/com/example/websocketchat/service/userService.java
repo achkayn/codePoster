@@ -53,9 +53,9 @@ public class userService {
         System.out.println(user.isReady());
         userRepository.save(user);
     }
-    public int readyNumber() {
-        List<User> users = userRepository.findByReady(true);
-        int count=users.size();
+    public int readyNumber(String roomId) {
+        List<User> users = userRepository.findByReadyAndWaitingroomId(true, roomId);
+        int count = users.size();
         return count;
     }
     public boolean checkExistingRoom(String roomId){
