@@ -298,18 +298,36 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
     const [players,      setPlayers]      = useState([]);
     const [tasks,        setTasks]        = useState(INITIAL_TASKS);
     const [activeWindow, setActiveWindow] = useState('neural_hash');
+    const activeWindowRef = useRef('neural_hash');
     const [chosenPlayer, setChosenPlayer] = useState('');
+
+    const fileEnterTimeRef = useRef(Date.now());
+    const timePerFileRef = useRef({
+        neural_hash: 0,
+        data_sort: 0,
+        auth_check: 0,
+        key_rotation: 0,
+        grid_scan: 0,
+    });
 
     const [messages,  setMessages]  = useState([
         { user: 'SYSTEM', text: 'Neural link established. Encryption active.', time: '00:00' }
     ]);
     const [chatInput, setChatInput] = useState('');
     const messagesEndRef = useRef(null);
+    const keystrokesPerFileRef = useRef({
+        neural_hash: 0,
+        data_sort: 0,
+        auth_check: 0,
+        key_rotation: 0,
+        grid_scan: 0,
+    });
 
     // Timer
     const [timeLeft,  setTimeLeft]  = useState(GAME_DURATION);
     const timerRef     = useRef(null);
     const gameEndedRef = useRef(false);
+    const fileSwitchesRef = useRef(0);
 
     // Voting
     const [emergencyOpen,  setEmergencyOpen]  = useState(false);
@@ -392,8 +410,36 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
         clearTimeout(blackoutTimerRef.current);
         clearTimeout(fileLockTimerRef.current);
         clearInterval(compileVoteTimerRef.current);
-        navigate('/reveal', { state: { outcome, imposterName, role } });
-    }, [navigate, role]);
+        const now = Date.now();
+        const elapsed = Math.floor((now - fileEnterTimeRef.current) / 1000);
+        if (activeWindowRef.current !== 'live') {
+            timePerFileRef.current[activeWindowRef.current] =
+                (timePerFileRef.current[activeWindowRef.current] || 0) + elapsed;
+        }
+        /*
+        fetch('http://localhost:8080/api/analytics/player-metrics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roomId: id,
+                username: username,
+                timePerFile: timePerFileRef.current,
+                keystrokesPerFile: keystrokesPerFileRef.current,
+                fileSwitches: fileSwitchesRef.current,
+            }),
+        }).catch(err => console.error('Failed to send metrics:', err)); */
+        const metricsBlob = new Blob([JSON.stringify({
+            roomId: id,
+            username: username,
+            timePerFile: timePerFileRef.current,
+            keystrokesPerFile: keystrokesPerFileRef.current,
+            fileSwitches: fileSwitchesRef.current,
+        })], { type: 'application/json' });
+        navigator.sendBeacon('http://localhost:8080/api/analytics/player-metrics', metricsBlob);
+        navigate('/reveal', {
+            state: { outcome, imposterName, role, roomId: id, username }
+        });
+    }, [id, navigate, role, username]);
 
     // ── Start cooldown for one sabotage type ──────────────────────────────────
     const startCooldown = useCallback((type, seconds) => {
@@ -725,8 +771,13 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
         const allDone = tasks.every(t => t.done);
         if (allDone && !taskCompleteSentRef.current && isConnected) {
             taskCompleteSentRef.current = true;
+            const completedTaskIds = tasks
+                .filter(t => t.done)
+                .map((_, i) => TASK_KEYS[i]);
             send(`/app/room/${id}/task`, {}, JSON.stringify({
-                sender: username, type: 'TASK_COMPLETE', content: 'all_done'
+                sender: username,
+                type: 'TASK_COMPLETE',
+                content: completedTaskIds.join(',')
             }));
         }
     }, [tasks, isImposter, isConnected, id, username, send]);
@@ -925,7 +976,18 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                 {windows.map((w) => (
                                     <button
                                         key={w.id}
-                                        onClick={() => setActiveWindow(w.id)}
+                                        onClick={() => {
+                                            const now = Date.now();
+                                            const elapsed = Math.floor((now - fileEnterTimeRef.current) / 1000);
+                                            if (activeWindowRef.current !== 'live') {
+                                                timePerFileRef.current[activeWindowRef.current] =
+                                                    (timePerFileRef.current[activeWindowRef.current] || 0) + elapsed;
+                                            }
+                                            fileEnterTimeRef.current = now;
+                                            fileSwitchesRef.current += 1;
+                                            setActiveWindow(w.id);
+                                            activeWindowRef.current = w.id;
+                                        }}
                                         className={`rounded-md px-3 py-1.5 text-[10px] font-medium uppercase tracking-widest transition-all shrink-0 ${
                                             activeWindow === w.id
                                                 ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
@@ -936,7 +998,18 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                     </button>
                                 ))}
                                 <button
-                                    onClick={() => setActiveWindow('live')}
+                                    onClick={() => {
+                                        const now = Date.now();
+                                        const elapsed = Math.floor((now - fileEnterTimeRef.current) / 1000);
+                                        if (activeWindowRef.current !== 'live') {
+                                            timePerFileRef.current[activeWindowRef.current] =
+                                                (timePerFileRef.current[activeWindowRef.current] || 0) + elapsed;
+                                        }
+                                        fileEnterTimeRef.current = now;
+                                        fileSwitchesRef.current += 1;
+                                        setActiveWindow('live');
+                                        activeWindowRef.current = 'live';
+                                    }}
                                     className={`rounded-md px-3 py-1.5 text-[10px] font-medium uppercase tracking-widest transition-all shrink-0 ${
                                         activeWindow === 'live'
                                             ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
@@ -1028,6 +1101,12 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                                     language="Python"
                                                     lineCount={30}
                                                     readOnly={isFileLocked}
+                                                    onKeyDown={() => {
+                                                        if (activeWindowRef.current !== 'live') {
+                                                            keystrokesPerFileRef.current[activeWindowRef.current] =
+                                                                (keystrokesPerFileRef.current[activeWindowRef.current] || 0) + 1;
+                                                        }
+                                                    }}
                                                 />
                                             </div>
                                         ))}

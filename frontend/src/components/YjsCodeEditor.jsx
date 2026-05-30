@@ -25,6 +25,7 @@ const YjsCodeEditor = ({
     language = 'Python',
     lineCount = 30,
     readOnly = false,
+    onKeyDown,
 }) => {
     const [code, setCode] = useState('');
     const textareaRef = useRef(null);
@@ -138,6 +139,7 @@ const YjsCodeEditor = ({
                     ref={textareaRef}
                     value={code}
                     onChange={handleChange}
+                    onKeyDown={onKeyDown}
                     readOnly={readOnly}
                     spellCheck={false}
                     className={`flex-1 resize-none bg-transparent py-2 pl-3 font-mono text-xs leading-6 outline-none scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent ${
