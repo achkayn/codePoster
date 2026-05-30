@@ -8,6 +8,7 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 
@@ -25,4 +26,8 @@ public class RedisConfig {
                 .serializeValuesWith(RedisSerializationContext.SerializationPair
                         .fromSerializer(new Jackson2JsonRedisSerializer<>(Object.class)));
     }
+    @Bean
+        public ObjectMapper objectMapper() {
+                return new ObjectMapper();
+        }
 }
