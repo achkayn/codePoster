@@ -415,7 +415,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
             timePerFileRef.current[activeWindow] =
                 (timePerFileRef.current[activeWindow] || 0) + elapsed;
         }
-
+        /*
         fetch('http://localhost:8080/api/analytics/player-metrics', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -426,7 +426,15 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                 keystrokesPerFile: keystrokesPerFileRef.current,
                 fileSwitches: fileSwitchesRef.current,
             }),
-        }).catch(err => console.error('Failed to send metrics:', err));
+        }).catch(err => console.error('Failed to send metrics:', err)); */
+        const metricsBlob = new Blob([JSON.stringify({
+            roomId: id,
+            username: username,
+            timePerFile: timePerFileRef.current,
+            keystrokesPerFile: keystrokesPerFileRef.current,
+            fileSwitches: fileSwitchesRef.current,
+        })], { type: 'application/json' });
+        navigator.sendBeacon('http://localhost:8080/api/analytics/player-metrics', metricsBlob);
         navigate('/reveal', {
             state: { outcome, imposterName, role, roomId: id, username }
         });

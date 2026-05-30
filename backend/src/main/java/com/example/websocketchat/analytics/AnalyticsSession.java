@@ -9,6 +9,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -38,9 +39,13 @@ public class AnalyticsSession {
         private String username;
         private String role;
         private boolean won;
-        private int tasksCompleted;
+        private boolean votedCorrectly;
+        private List<String> tasksCompleted;
         private int votesCast;
         private int sabotagesTriggered;
-        private List<String> compileResults;
+        private Map<String, String> compilationResults;
+        private Map<String, Integer> timePerFile;
+        private Map<String, Integer> keystrokesPerFile;
+        private int fileSwitches;
     }
 }
