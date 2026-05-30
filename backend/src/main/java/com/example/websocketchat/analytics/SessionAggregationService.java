@@ -36,6 +36,8 @@ public class SessionAggregationService {
     @Async
     public void buildAndSaveSession(String roomId, String outcome, String actualImpostor, Instant gameStartedAt) {
         try {
+            // Wait for all player beacon requests to arrive before aggregating
+            Thread.sleep(5000);
             List<AnalyticsEvent> events = eventRepository.findByRoomId(roomId);
             if (events.isEmpty()) {
                 logger.warn("No analytics events found for roomId {}", roomId);
