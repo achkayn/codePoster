@@ -6,7 +6,16 @@ import gsap from 'gsap';
 const RevealPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const { outcome = 'victory', imposterName = 'Vector', role = 'crewmate' } = location.state || {};
+    const {
+        outcome = 'victory',
+        imposterName = 'Vector',
+        role = 'crewmate',
+        roomId,
+        username,
+    } = location.state || {};
+
+    const [session, setSession] = useState(null);
+    const [loadingStats, setLoadingStats] = useState(false);
 
     const [showContent, setShowContent] = useState(false);
     const containerRef = useRef(null);
@@ -28,10 +37,27 @@ const RevealPage = () => {
         }
     }, [showContent]);
 
+    useEffect(() => {
+        if (!roomId || !showContent) return;
+        setLoadingStats(true);
+        const timer = setTimeout(() => {
+            fetch(`http://localhost:8080/api/analytics/session/${roomId}`)
+                .then(res => res.ok ? res.json() : null)
+                .then(data => {
+                    setSession(data);
+                    setLoadingStats(false);
+                })
+                .catch(() => setLoadingStats(false));
+        }, 2000);
+        return () => clearTimeout(timer);
+    }, [roomId, showContent]);
+
     const isVictory = outcome === 'victory';
     const resultTitle = isVictory ? 'VICTORY' : 'DEFEAT';
     const mainText = isVictory ? 'MISSION SUCCESS' : 'MISSION FAILED';
     const subText = isVictory ? 'The threat has been neutralized.' : 'The imposter has successfully compromised the network.';
+    const myStats = session?.players?.find(
+        p => p.username === username) || null;
 
     return (
         <div ref={containerRef} className="flex min-h-screen w-full flex-col items-center justify-center bg-black text-white overflow-hidden relative font-sans">
@@ -104,6 +130,111 @@ const RevealPage = () => {
                             New Session
                         </Button>
                     </div>
+
+                    {(loadingStats || myStats) && (
+                        <div className="mt-12 w-full max-w-2xl">
+                            <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-4 text-center">
+                                Your Performance
+                            </h3>
+
+                            {loadingStats && (
+                                <p className="text-center text-xs text-white/30 animate-pulse uppercase tracking-widest">
+                                    Loading stats...
+                                </p>
+                            )}
+
+                            {myStats && (
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {[
+                                            {
+                                                label: 'Tasks Done',
+                                                val: myStats.tasksCompleted?.length ?? 0,
+                                                color: 'text-emerald-400'
+                                            },
+                                            {
+                                                label: 'File Switches',
+                                                val: myStats.fileSwitches ?? 0,
+                                                color: 'text-cyan-400'
+                                            },
+                                            {
+                                                label: 'Voted Correctly',
+                                                val: myStats.votedCorrectly ? 'Yes' : 'No',
+                                                color: myStats.votedCorrectly
+                                                    ? 'text-emerald-400' : 'text-red-400'
+                                            },
+                                        ].map(s => (
+                                            <div
+                                                key={s.label}
+                                                className="rounded-xl border border-white/5 bg-white/[0.02] p-4 text-center"
+                                            >
+                                                <p className={`text-2xl font-mono font-medium ${s.color}`}>
+                                                    {s.val}
+                                                </p>
+                                                <p className="text-[9px] text-white/25 uppercase tracking-widest mt-1">
+                                                    {s.label}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {myStats.compilationResults &&
+                                     Object.keys(myStats.compilationResults).length > 0 && (
+                                        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                                            <p className="text-[9px] uppercase tracking-widest text-white/30 mb-3">
+                                                Compile Results
+                                            </p>
+                                            <div className="space-y-2">
+                                                {Object.entries(myStats.compilationResults)
+                                                    .map(([task, verdict]) => (
+                                                    <div
+                                                        key={task}
+                                                        className="flex items-center justify-between"
+                                                    >
+                                                        <span className="text-xs font-mono text-white/50">
+                                                            {task}.py
+                                                        </span>
+                                                        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${
+                                                            verdict === 'ACCEPTED'
+                                                                ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                                                                : 'text-red-400 border-red-500/30 bg-red-500/10'
+                                                        }`}>
+                                                            {verdict}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {myStats.timePerFile &&
+                                     Object.keys(myStats.timePerFile).length > 0 && (
+                                        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                                            <p className="text-[9px] uppercase tracking-widest text-white/30 mb-3">
+                                                Time Per File
+                                            </p>
+                                            <div className="space-y-2">
+                                                {Object.entries(myStats.timePerFile)
+                                                    .map(([task, secs]) => (
+                                                    <div
+                                                        key={task}
+                                                        className="flex items-center justify-between"
+                                                    >
+                                                        <span className="text-xs font-mono text-white/50">
+                                                            {task}.py
+                                                        </span>
+                                                        <span className="text-xs font-mono text-cyan-400/70">
+                                                            {secs}s
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
