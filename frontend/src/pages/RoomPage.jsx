@@ -106,29 +106,7 @@ const INITIAL_TASKS = [
     { id: 5, label: 'Implement pattern_match()',  done: false },
 ];
 
-// ─── Static compile results (errors + accuracy per file) ─────────────────────
-const STATIC_COMPILE_RESULTS = {
-    neural_hash:  {
-        errors: [{ type: 'error',   msg: "secure_hash() not implemented — returns None" }],
-        accuracy: 0,
-    },
-    data_sort:    {
-        errors: [{ type: 'error',   msg: "quicksort drops duplicates — logic bug on lines 5–6" }],
-        accuracy: 40,
-    },
-    auth_check:   {
-        errors: [{ type: 'error',   msg: "token_verify() not implemented — returns None" }],
-        accuracy: 0,
-    },
-    key_rotation: {
-        errors: [{ type: 'warning', msg: "rotation returns right-rotated bytes — expected left" }],
-        accuracy: 55,
-    },
-    grid_scan:    {
-        errors: [],
-        accuracy: 100,
-    },
-};
+const TASK_KEYS = ['neural_hash', 'data_sort', 'auth_check', 'key_rotation', 'grid_scan'];
 
 // ─── Sabotage ability definitions ─────────────────────────────────────────────
 const SABOTAGE_TYPES = [
@@ -392,6 +370,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
     const [myCompileVote,      setMyCompileVote]       = useState(null);
     const [compileVoteTimer,   setCompileVoteTimer]   = useState(15);
     const [showCompileResults, setShowCompileResults] = useState(false);
+    const [compileResults, setCompileResults] = useState({});
     const [compileRunning,     setCompileRunning]     = useState(false);
     const [compileLogs,        setCompileLogs]        = useState([]);
     const compileVoteTimerRef  = useRef(null);
@@ -432,30 +411,57 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
         }, 1000);
     }, []);
 
-    // ── triggerCompile: run the static compile animation then show results ────
-    const triggerCompile = useCallback(() => {
+    const triggerCompile = useCallback(async () => {
         setCompileVoteOpen(false);
         setCompileRunning(true);
         setCompileLogs([]);
-        addSystemMessage('⚙ Compile vote passed — building all modules...');
+        setShowCompileResults(false);
+        addSystemMessage('⚙ Compile vote passed — running tests on all modules...');
 
-        const files = Object.keys(STATIC_COMPILE_RESULTS);
-        files.forEach((f, i) => {
-            setTimeout(() => {
-                setCompileLogs(prev => [...prev, `[0x0${i + 1}] Scanning ${f}.py...`]);
-            }, 300 + i * 380);
-        });
+        const taskKeys = TASK_KEYS;
+        const results = {};
 
-        setTimeout(() => {
-            setCompileLogs(prev => [...prev, '[OK] Static analysis complete.']);
-        }, 300 + files.length * 380);
+        for (let i = 0; i < taskKeys.length; i++) {
+            const taskId = taskKeys[i];
+            setCompileLogs(prev => [...prev, `[0x0${i + 1}] Testing ${taskId}.py...`]);
 
-        setTimeout(() => {
-            setCompileRunning(false);
-            setShowCompileResults(true);
-            addSystemMessage('Build report ready. Check the Compile Results panel.');
-        }, 300 + files.length * 380 + 600);
-    }, [addSystemMessage]);
+            const ytext = getYText(taskId);
+            const code = ytext ? ytext.toString() : '';
+
+            try {
+                const response = await fetch('http://localhost:8080/api/compile/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        files: { 'solution.py': code },
+                        taskId: taskId,
+                        roomId: id,
+                        username: username,
+                    }),
+                });
+                const verdict = await response.text();
+                results[taskId] = verdict.split('\n')[0].trim();
+            } catch (err) {
+                results[taskId] = 'RUNTIME_ERROR';
+            }
+
+            setCompileLogs(prev => [
+                ...prev,
+                `  → ${results[taskId]}`
+            ]);
+        }
+
+        setCompileLogs(prev => [...prev, '[OK] All modules tested.']);
+        setCompileRunning(false);
+        setCompileResults(results);
+        setShowCompileResults(true);
+        addSystemMessage('Build report ready. Check the Compile Results panel.');
+
+        setTasks(prev => prev.map((task, i) => {
+            const taskId = taskKeys[i];
+            return results[taskId] === 'ACCEPTED' ? { ...task, done: true } : task;
+        }));
+    }, [addSystemMessage, getYText, id, username]);
 
     // ── Resolve compile vote: tally and decide ────────────────────────────────
     const resolveCompileVote = useCallback((votes, allPlayers) => {
@@ -826,14 +832,6 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
 
     const tasksDone      = tasks.filter(t => t.done).length;
     const isTimeCritical = timeLeft <= 30;
-
-    // ── Derived compile stats ─────────────────────────────────────────────────
-    const compileStats = {
-        errors:   Object.values(STATIC_COMPILE_RESULTS).flatMap(r => r.errors.filter(e => e.type === 'error')).length,
-        warnings: Object.values(STATIC_COMPILE_RESULTS).flatMap(r => r.errors.filter(e => e.type === 'warning')).length,
-        avgAcc:   Math.round(Object.values(STATIC_COMPILE_RESULTS).reduce((a, r) => a + r.accuracy, 0) / Object.keys(STATIC_COMPILE_RESULTS).length),
-        passing:  Object.values(STATIC_COMPILE_RESULTS).filter(r => r.errors.length === 0).length,
-    };
 
     // ─── Render ───────────────────────────────────────────────────────────────
     return (
@@ -1387,7 +1385,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                     {log}
                                 </div>
                             ))}
-                            {compileLogs.length < Object.keys(STATIC_COMPILE_RESULTS).length + 1 && (
+                            {compileLogs.length < TASK_KEYS.length + 1 && (
                                 <div className="text-[11px] text-cyan-400/40 animate-pulse">_</div>
                             )}
                         </div>
@@ -1397,7 +1395,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                 className="h-full bg-cyan-500/60 transition-all duration-300"
                                 style={{
                                     width: `${Math.min(
-                                        (compileLogs.length / (Object.keys(STATIC_COMPILE_RESULTS).length + 1)) * 100,
+                                        (compileLogs.length / (TASK_KEYS.length + 1)) * 100,
                                         100
                                     )}%`
                                 }}
@@ -1421,12 +1419,8 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                         <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-3">
                                 <h3 className="text-lg font-medium uppercase tracking-widest text-cyan-400/90">Build Report</h3>
-                                <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${
-                                    compileStats.errors > 0
-                                        ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                }`}>
-                                    {compileStats.errors > 0 ? `${compileStats.errors} error${compileStats.errors !== 1 ? 's' : ''}` : 'Clean'}
+                                <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border bg-white/5 text-white/50 border-white/10">
+                                    Build Summary
                                 </span>
                             </div>
                             <button
@@ -1437,63 +1431,34 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                             </button>
                         </div>
                         <p className="text-[10px] uppercase tracking-widest text-white/30 mb-5">
-                            Static analysis — current code state across all modules
+                            Runtime compilation results across all modules
                         </p>
 
                         {/* File rows */}
                         <div className="space-y-2 mb-5">
-                            {/* Column headers */}
-                            <div className="grid grid-cols-[1fr_90px_80px] gap-3 px-3 pb-1">
-                                <span className="text-[9px] uppercase tracking-widest text-white/25">File</span>
-                                <span className="text-[9px] uppercase tracking-widest text-white/25 text-center">Status</span>
-                                <span className="text-[9px] uppercase tracking-widest text-white/25 text-center">Accuracy</span>
-                            </div>
-
-                            {Object.entries(STATIC_COMPILE_RESULTS).map(([file, result]) => {
-                                const hasError   = result.errors.some(e => e.type === 'error');
-                                const hasWarning = result.errors.some(e => e.type === 'warning');
-                                const isClean    = result.errors.length === 0;
-
-                                const statusLabel = hasError ? 'Error' : hasWarning ? 'Warning' : 'Clean';
-                                const statusClass = hasError
-                                    ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                                    : hasWarning
-                                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
-                                const accColor = hasError ? 'text-red-400' : hasWarning ? 'text-amber-400' : 'text-emerald-400';
-                                const barColor = hasError ? 'bg-red-500/50' : hasWarning ? 'bg-amber-500/50' : 'bg-emerald-500/50';
+                            {TASK_KEYS.map(taskId => {
+                                const verdict = compileResults[taskId] || 'PENDING';
+                                const isAccepted = verdict === 'ACCEPTED';
+                                const isTimeout = verdict === 'TIME_LIMIT_EXCEEDED';
+                                const statusLabel = isAccepted ? 'ACCEPTED'
+                                    : isTimeout ? 'TIMEOUT'
+                                        : verdict === 'WRONG_ANSWER' ? 'WRONG'
+                                            : verdict === 'RUNTIME_ERROR' ? 'ERROR'
+                                                : 'PENDING';
+                                const statusClass = isAccepted
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                    : 'bg-red-500/10 text-red-400 border-red-500/30';
 
                                 return (
-                                    <div key={file} className="grid grid-cols-[1fr_90px_80px] gap-3 items-start rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
-                                        {/* File info */}
-                                        <div>
-                                            <p className="text-xs text-white/70 font-mono mb-1.5">{file}.py</p>
-                                            {isClean ? (
-                                                <p className="text-[10px] text-emerald-400/70">✓ All assertions pass</p>
-                                            ) : result.errors.map((e, i) => (
-                                                <p key={i} className={`text-[10px] leading-relaxed ${
-                                                    e.type === 'error' ? 'text-red-400/70' : 'text-amber-400/70'
-                                                }`}>
-                                                    {e.type === 'error' ? '✗' : '⚠'} {e.msg}
-                                                </p>
-                                            ))}
-                                            {/* Accuracy bar */}
-                                            <div className="mt-2 h-0.5 rounded-full bg-white/5 overflow-hidden">
-                                                <div
-                                                    className={`h-full rounded-full ${barColor}`}
-                                                    style={{ width: `${result.accuracy}%` }}
-                                                />
-                                            </div>
-                                        </div>
-                                        {/* Status badge */}
-                                        <div className="flex justify-center pt-0.5">
+                                    <div
+                                        key={taskId}
+                                        className="grid grid-cols-[1fr_100px] gap-3 items-center rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3"
+                                    >
+                                        <p className="text-xs text-white/70 font-mono">{taskId}.py</p>
+                                        <div className="flex justify-center">
                                             <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${statusClass}`}>
                                                 {statusLabel}
                                             </span>
-                                        </div>
-                                        {/* Accuracy number */}
-                                        <div className="text-center pt-0.5">
-                                            <span className={`text-sm font-mono font-medium ${accColor}`}>{result.accuracy}%</span>
                                         </div>
                                     </div>
                                 );
@@ -1501,19 +1466,27 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                         </div>
 
                         {/* Summary stats */}
-                        <div className="grid grid-cols-4 gap-3 border-t border-white/5 pt-4">
-                            {[
-                                { label: 'Errors',      val: compileStats.errors,              color: 'text-red-400' },
-                                { label: 'Warnings',    val: compileStats.warnings,            color: 'text-amber-400' },
-                                { label: 'Avg score',   val: `${compileStats.avgAcc}%`,        color: 'text-cyan-400' },
-                                { label: 'Files clean', val: `${compileStats.passing}/5`,      color: 'text-emerald-400' },
-                            ].map(s => (
-                                <div key={s.label} className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center">
-                                    <p className={`text-xl font-mono font-medium ${s.color}`}>{s.val}</p>
-                                    <p className="text-[9px] text-white/25 uppercase tracking-widest mt-1">{s.label}</p>
+                        {(() => {
+                            const passing = Object.values(compileResults).filter(v => v === 'ACCEPTED').length;
+                            const errors = Object.values(compileResults).filter(v => v === 'RUNTIME_ERROR').length;
+                            const wrong = Object.values(compileResults).filter(v => v === 'WRONG_ANSWER').length;
+                            const timeouts = Object.values(compileResults).filter(v => v === 'TIME_LIMIT_EXCEEDED').length;
+                            return (
+                                <div className="grid grid-cols-4 gap-3 border-t border-white/5 pt-4">
+                                    {[
+                                        { label: 'Passed', val: passing, color: 'text-emerald-400' },
+                                        { label: 'Wrong', val: wrong, color: 'text-amber-400' },
+                                        { label: 'Errors', val: errors, color: 'text-red-400' },
+                                        { label: 'Timeouts', val: timeouts, color: 'text-orange-400' },
+                                    ].map(s => (
+                                        <div key={s.label} className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center">
+                                            <p className={`text-xl font-mono font-medium ${s.color}`}>{s.val}</p>
+                                            <p className="text-[9px] text-white/25 uppercase tracking-widest mt-1">{s.label}</p>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
+                            );
+                        })()}
 
                         <p className="mt-4 text-center text-[10px] text-white/20 uppercase tracking-widest">
                             Click anywhere outside to close
