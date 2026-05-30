@@ -13,23 +13,34 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/analytics")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:5173")
+//@CrossOrigin(origins = "http://localhost:5173")
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
     private final AnalyticsSessionRepository analyticsSessionRepository;
 
+    private static final Logger logger = LoggerFactory.getLogger(AnalyticsController.class);
+
     @PostMapping("/player-metrics")
+    public ResponseEntity<Void> receiveMetrics(@RequestBody PlayerMetrics metrics) {
+        logger.info("Received metrics for {} in room {}: fileSwitches={}, timePerFile={}",
+            metrics.getUsername(), metrics.getRoomId(),
+            metrics.getFileSwitches(), metrics.getTimePerFile());
+        analyticsService.storePlayerMetrics(metrics);
+        return ResponseEntity.ok().build();
+    }
+    /*@PostMapping("/player-metrics")
     public ResponseEntity<Void> receiveMetrics(
             @RequestBody PlayerMetrics metrics) {
         analyticsService.storePlayerMetrics(metrics);
         return ResponseEntity.ok().build();
-    }
-
+    }*/
     @GetMapping("/session/{roomId}")
     public ResponseEntity<AnalyticsSession> getSession(
             @PathVariable String roomId) {
