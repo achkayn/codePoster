@@ -1,5 +1,6 @@
 package com.example.websocketchat.service;
 
+import com.example.websocketchat.analytics.AnalyticsService;
 import com.example.websocketchat.model.ChatMessage;
 import com.example.websocketchat.model.User;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class RoomService {
 
     private final userService userService;
     private final MessagingService messagingService;
+    private final AnalyticsService analyticsService;
 
     // Prevent double role-assignment per room
     private final ConcurrentHashMap<String, Boolean> rolesAssignedByRoom = new ConcurrentHashMap<>();
@@ -60,7 +62,7 @@ public class RoomService {
 
     public void handlePlayerReady(String roomId, String username) {
         userService.changeReady(username,roomId);
-        int readyCount = userService.readyNumber();
+        int readyCount = userService.readyNumber(roomId);
 
         rolesAssignedByRoom.putIfAbsent(roomId, false);
         if (readyCount == 4 && rolesAssignedByRoom.replace(roomId, false, true)) {
@@ -88,6 +90,7 @@ public class RoomService {
                         .type(ChatMessage.MsgType.START_GAME)
                         .sender(triggeringUser)
                         .build());
+        analyticsService.recordGameStart(roomId);
     }
 
     // ─── Task completion ─────────────────────────────────────────────────────
@@ -119,6 +122,7 @@ public class RoomService {
                     .findFirst()
                     .map(User::getUsername)
                     .orElse("Unknown");
+            analyticsService.finalizeSession(roomId, "crewmates_win", imposterName);
             cleanupRoom(roomId);
             return Optional.of(ChatMessage.builder()
                     .type(ChatMessage.MsgType.GAME_OVER)
@@ -175,6 +179,7 @@ public class RoomService {
 
 
         votesByRoom.remove(roomId);
+        analyticsService.finalizeSession(roomId, outcome, actualImposter);
         cleanupRoom(roomId);
 
 
@@ -201,6 +206,7 @@ public class RoomService {
                 .map(User::getUsername)
                 .orElse("Unknown");
 
+        analyticsService.finalizeSession(roomId, triggerContent, imposterName);
         cleanupRoom(roomId);
 
         messagingService.sendToTopic("/topic/room/" + roomId,

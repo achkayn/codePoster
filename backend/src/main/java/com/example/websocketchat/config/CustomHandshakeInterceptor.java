@@ -23,9 +23,15 @@ public class CustomHandshakeInterceptor implements HandshakeInterceptor {
         String sessionId = UUID.randomUUID().toString();
         attributes.put("sessionId", sessionId);
 
-        if (query != null && query.contains("username=")) {
-            String username = query.split("username=")[1];
-            attributes.put("username", username);
+        if (query != null) {
+            String[] params = query.split("&");
+            for (String param : params) {
+                String[] pair = param.split("=", 2);
+                if (pair.length == 2 && "username".equals(pair[0])) {
+                    attributes.put("username", pair[1]);
+                    break;
+                }
+            }
         }
 
         return true;

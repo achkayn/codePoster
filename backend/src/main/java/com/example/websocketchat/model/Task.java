@@ -26,6 +26,7 @@ public class Task {
 
     private String starterCode;   // what players start with (the buggy/empty version)
     private String solution;      // the correct reference solution
+    private String testScript;    // python test runner for this task
 
     // What the solution should print when run
     // Each entry: { "input": "Hello,13", "expectedOutput": "Uryyb" }

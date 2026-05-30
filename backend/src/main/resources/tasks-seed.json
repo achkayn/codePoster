@@ -1,0 +1,47 @@
+[
+  {
+    "key": "neural_hash",
+    "title": "Neural Hash",
+    "description": "Implement neural_hash(data: str) -> str that returns the SHA-256 hex digest of the input string encoded as UTF-8.",
+    "starterCode": "def neural_hash(data: str) -> str:\n    # TODO: implement SHA-256 hashing\n    pass\n",
+    "solution": "import hashlib\ndef neural_hash(data: str) -> str:\n    return hashlib.sha256(data.encode('utf-8')).hexdigest()\n",
+    "testScript": "import sys, traceback, hashlib\ntry:\n    from solution import neural_hash\n    cases = [\n        ('hello', '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'),\n        ('',      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'),\n    ]\n    for inp, expected in cases:\n        result = neural_hash(inp)\n        if result != expected:\n            print('WRONG_ANSWER')\n            print(f'Input: {inp!r}, Expected: {expected}, Got: {result}')\n            sys.exit(0)\n    cp = neural_hash('CodePoster')\n    if len(cp) != 64 or not all(c in '0123456789abcdef' for c in cp):\n        print('WRONG_ANSWER')\n        print(f'neural_hash(CodePoster) must be 64-char lowercase hex, got: {cp}')\n        sys.exit(0)\n    print('ACCEPTED')\nexcept Exception:\n    print('RUNTIME_ERROR')\n    traceback.print_exc()\n",
+    "difficulty": 2
+  },
+  {
+    "key": "data_sort",
+    "title": "Data Sort",
+    "description": "Implement data_sort(records: list[dict]) -> list[dict] that sorts records by 'score' descending, ties broken by 'name' ascending.",
+    "starterCode": "def data_sort(records: list) -> list:\n    # TODO: sort by score desc, name asc on ties\n    pass\n",
+    "solution": "def data_sort(records: list) -> list:\n    return sorted(records, key=lambda r: (-r['score'], r['name']))\n",
+    "testScript": "import sys, traceback\ntry:\n    from solution import data_sort\n    records = [{'name': 'Bob', 'score': 3}, {'name': 'Alice', 'score': 5}, {'name': 'Charlie', 'score': 3}]\n    expected = [{'name': 'Alice', 'score': 5}, {'name': 'Bob', 'score': 3}, {'name': 'Charlie', 'score': 3}]\n    result = data_sort(records)\n    if result != expected:\n        print('WRONG_ANSWER')\n        print(f'Expected: {expected}')\n        print(f'Got:      {result}')\n    else:\n        print('ACCEPTED')\nexcept Exception:\n    print('RUNTIME_ERROR')\n    traceback.print_exc()\n",
+    "difficulty": 1
+  },
+  {
+    "key": "auth_check",
+    "title": "Auth Check",
+    "description": "Implement auth_check(token: str) -> bool that returns True if token starts with 'Bearer ' followed by at least 8 alphanumeric characters.",
+    "starterCode": "def auth_check(token: str) -> bool:\n    # TODO: validate Bearer token format\n    pass\n",
+    "solution": "import re\ndef auth_check(token: str) -> bool:\n    return bool(re.match(r'^Bearer [a-zA-Z0-9]{8,}$', token))\n",
+    "testScript": "import sys, traceback\ntry:\n    from solution import auth_check\n    cases = [\n        ('Bearer abc12345', True),\n        ('Bearer ab1',      False),\n        ('Token abc12345',  False),\n        ('',                False),\n    ]\n    for inp, expected in cases:\n        result = auth_check(inp)\n        if result != expected:\n            print('WRONG_ANSWER')\n            print(f'Input: {inp!r}, Expected: {expected}, Got: {result}')\n            sys.exit(0)\n    print('ACCEPTED')\nexcept Exception:\n    print('RUNTIME_ERROR')\n    traceback.print_exc()\n",
+    "difficulty": 2
+  },
+  {
+    "key": "key_rotation",
+    "title": "Key Rotation",
+    "description": "Implement key_rotation(keys: list[str], n: int) -> list[str] that rotates the list RIGHT by n positions.",
+    "starterCode": "def key_rotation(keys: list, n: int) -> list:\n    # TODO: rotate the list right by n positions\n    pass\n",
+    "solution": "def key_rotation(keys: list, n: int) -> list:\n    if not keys:\n        return keys\n    n = n % len(keys)\n    return keys[len(keys)-n:] + keys[:len(keys)-n]\n",
+    "testScript": "import sys, traceback\ntry:\n    from solution import key_rotation\n    cases = [\n        ((['a','b','c','d'], 1), ['d','a','b','c']),\n        ((['a','b','c','d'], 0), ['a','b','c','d']),\n        ((['x'],             2), ['x']),\n    ]\n    for (keys, n), expected in cases:\n        result = key_rotation(keys, n)\n        if result != expected:\n            print('WRONG_ANSWER')\n            print(f'keys={keys}, n={n} -> Expected: {expected}, Got: {result}')\n            sys.exit(0)\n    print('ACCEPTED')\nexcept Exception:\n    print('RUNTIME_ERROR')\n    traceback.print_exc()\n",
+    "difficulty": 2
+  },
+  {
+    "key": "grid_scan",
+    "title": "Grid Scan",
+    "description": "Implement grid_scan(grid: list[list[int]], target: int) -> list[tuple] that returns all (row, col) positions where grid[row][col] == target, in row-major order.",
+    "starterCode": "def grid_scan(grid: list, target: int) -> list:\n    # TODO: find all positions of target in the grid\n    pass\n",
+    "solution": "def grid_scan(grid: list, target: int) -> list:\n    return [(r, c) for r, row in enumerate(grid) for c, val in enumerate(row) if val == target]\n",
+    "testScript": "import sys, traceback\ntry:\n    from solution import grid_scan\n    grid = [[1,2,3],[4,2,6],[7,8,2]]\n    cases = [\n        (2, [(0,1),(1,1),(2,2)]),\n        (9, []),\n    ]\n    for target, expected in cases:\n        result = grid_scan(grid, target)\n        normalized = [tuple(r) for r in result]\n        if normalized != expected:\n            print('WRONG_ANSWER')\n            print(f'target={target}, Expected: {expected}, Got: {result}')\n            sys.exit(0)\n    print('ACCEPTED')\nexcept Exception:\n    print('RUNTIME_ERROR')\n    traceback.print_exc()\n",
+    "difficulty": 3
+  }
+]

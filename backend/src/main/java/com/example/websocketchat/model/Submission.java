@@ -3,15 +3,18 @@ package com.example.websocketchat.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 import java.util.Map;
 
 @Data
 @AllArgsConstructor
+@NoArgsConstructor
 public class Submission {
     private Map<String, String> files;
+  private String taskId;
+  private String roomId;
+  private String username;
     /* un exemple:
     {
   "files": {

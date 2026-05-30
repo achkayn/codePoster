@@ -36,8 +36,12 @@ public class WebSocketEventListener {
         System.out.println("/testsetst");
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
 
-        String username = (String) headerAccessor.getSessionAttributes().get("username");
-        String roomId = (String) headerAccessor.getSessionAttributes().get("waitingid");
+        if (headerAccessor.getSessionAttributes() == null) {
+            return;
+        }
+        Map<String, Object> attrs = headerAccessor.getSessionAttributes();
+        String username = (String) attrs.get("username");
+        String roomId = attrs != null ? (String) attrs.get("waitingid") : null;
         System.out.println("Disconnected from " + username + " room " + roomId);
         if (username != null) {
             log.info("user disconnected: {}", username);
@@ -45,8 +49,12 @@ public class WebSocketEventListener {
                     .type(ChatMessage.MsgType.LEAVE)
                     .sender(username)
                     .build();
-            userRepository.deleteByUsernameAndWaitingroomId(username,roomId);
-            messagingTemplate.convertAndSend("/topic/waiting/"+roomId, chatMessage);
+            if (roomId != null) {
+                userRepository.deleteByUsernameAndWaitingroomId(username, roomId);
+                messagingTemplate.convertAndSend("/topic/waiting/" + roomId, chatMessage);
+            } else {
+                userRepository.deleteByUsername(username);
+            }
         }
     }
     /*@EventListener

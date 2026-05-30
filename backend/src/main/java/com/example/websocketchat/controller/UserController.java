@@ -4,6 +4,7 @@ import com.example.websocketchat.model.User;
 import com.example.websocketchat.service.userService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,6 +32,7 @@ public class UserController {
         return ResponseEntity.ok(userService.findAll());
     }
     @DeleteMapping("/delAll")
+    @Profile("dev")
     public void deleteAll() {
         userService.deleteAll();
     }
