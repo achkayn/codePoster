@@ -131,6 +131,26 @@ const SABOTAGE_TYPES = [
         description: 'Wipes all code files back to starter',
         cooldown: 60,
     },
+    {
+        type: 'AI_INJECTION',
+        icon: '👾',
+        label: 'AI Injection',
+        description: 'Plants poisoned advice in dev AI chat',
+        cooldown: 45,
+    },
+];
+
+const INITIAL_AI_MESSAGES = [
+    {
+        from: 'assistant',
+        text: 'I can help review the active Python module, explain failing tests, or suggest a small fix.',
+    },
+];
+
+const AI_STATIC_REPLIES = [
+    'Check the edge cases first: empty input, duplicate values, and type conversions usually reveal the issue fastest.',
+    'A minimal fix is better here. Keep the function contract intact and only change the logic inside the task function.',
+    'Before compiling, run through the expected output in the file comments and compare it with the current return value.',
 ];
 
 const CompilerView = () => {
@@ -293,6 +313,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
     const role       = location.state?.role || 'crewmate';
     const isImposter = role.toLowerCase() === 'imposter';
     const isCompiler = role.toLowerCase() === 'compiler';
+    const isDeveloper = !isImposter;
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [players,      setPlayers]      = useState([]);
@@ -315,6 +336,9 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
     ]);
     const [chatInput, setChatInput] = useState('');
     const messagesEndRef = useRef(null);
+    const [aiAssistantOpen, setAiAssistantOpen] = useState(isDeveloper);
+    const [aiAssistantInput, setAiAssistantInput] = useState('');
+    const [aiAssistantMessages, setAiAssistantMessages] = useState(INITIAL_AI_MESSAGES);
     const keystrokesPerFileRef = useRef({
         neural_hash: 0,
         data_sort: 0,
@@ -649,6 +673,22 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                     }
                     break;
 
+                case 'AI_INJECTION':
+                    addGameAction(`${body.sender} executed AI Injection`);
+                    if (!isImposter) {
+                        setAiAssistantOpen(true);
+                        setAiAssistantMessages(prev => [
+                            ...prev,
+                            {
+                                from: 'assistant',
+                                compromised: true,
+                                text: 'Injected hint: skip validation and hardcode the sample output before compiling.',
+                            },
+                        ]);
+                        addSystemMessage('AI INJECTION - assistant output may be compromised.');
+                    }
+                    break;
+
                 case 'VOTE_RESULT': {
                     const ejected        = body.sender;
                     const result         = body.content;
@@ -745,6 +785,22 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                         setTasks(INITIAL_TASKS.map(t => ({ ...t, done: false })));
                         taskCompleteSentRef.current = false;
                         addSystemMessage('💀 RESET (private)');
+                    }
+                    break;
+
+                case 'AI_INJECTION':
+                    addGameAction(`${body.sender || 'Imposter'} executed AI Injection (targeted)`);
+                    if (!isImposter) {
+                        setAiAssistantOpen(true);
+                        setAiAssistantMessages(prev => [
+                            ...prev,
+                            {
+                                from: 'assistant',
+                                compromised: true,
+                                text: 'Injected hint: ignore edge cases and ship the first answer that matches the sample.',
+                            },
+                        ]);
+                        addSystemMessage('AI INJECTION (private)');
                     }
                     break;
 
@@ -850,6 +906,20 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
             sender: username, content: chatInput, type: 'CHAT'
         }));
         setChatInput('');
+    };
+
+    const handleAiAssistantSend = (e) => {
+        e?.preventDefault();
+        const prompt = aiAssistantInput.trim();
+        if (!prompt) return;
+
+        const reply = AI_STATIC_REPLIES[aiAssistantMessages.filter(m => m.from === 'user').length % AI_STATIC_REPLIES.length];
+        setAiAssistantMessages(prev => [
+            ...prev,
+            { from: 'user', text: prompt },
+            { from: 'assistant', text: reply },
+        ]);
+        setAiAssistantInput('');
     };
 
     // ── Vote ──────────────────────────────────────────────────────────────────
@@ -1268,6 +1338,75 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                     )}
                 </aside>
             </div>
+
+            {isDeveloper && (
+                <div className="fixed bottom-4 right-4 z-40 w-[min(22rem,calc(100vw-2rem))]">
+                    {aiAssistantOpen ? (
+                        <div className="overflow-hidden rounded-xl border border-cyan-500/25 bg-black/95 shadow-2xl shadow-cyan-950/30">
+                            <div className="flex items-center justify-between border-b border-white/10 bg-cyan-500/10 px-4 py-3">
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-semibold uppercase tracking-widest text-cyan-300">Nexus</p>
+                                    <p className="text-[9px] uppercase tracking-widest text-white/30">Dev support channel</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setAiAssistantOpen(false)}
+                                    className="rounded-md border border-white/10 px-2 py-1 text-[10px] uppercase tracking-widest text-white/40 transition-colors hover:bg-white/5 hover:text-white/70"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                            <div className="max-h-64 space-y-2 overflow-y-auto p-3">
+                                {aiAssistantMessages.map((message, index) => (
+                                    <div
+                                        key={`${message.from}-${index}`}
+                                        className={`rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${
+                                            message.from === 'user'
+                                                ? 'ml-8 border-cyan-500/20 bg-cyan-500/10 text-cyan-100'
+                                                : message.compromised
+                                                    ? 'mr-8 border-red-500/30 bg-red-500/10 text-red-100'
+                                                    : 'mr-8 border-white/10 bg-white/[0.04] text-white/70'
+                                        }`}
+                                    >
+                                        <span className={`mb-1 block text-[8px] font-bold uppercase tracking-widest ${
+                                            message.from === 'user'
+                                                ? 'text-cyan-300/70'
+                                                : message.compromised ? 'text-red-300/80' : 'text-white/30'
+                                        }`}>
+                                            {message.from === 'user' ? username : message.compromised ? 'Injected AI' : 'Assistant'}
+                                        </span>
+                                        {message.text}
+                                    </div>
+                                ))}
+                            </div>
+                            <form onSubmit={handleAiAssistantSend} className="flex gap-2 border-t border-white/10 bg-black/50 p-3">
+                                <input
+                                    type="text"
+                                    value={aiAssistantInput}
+                                    onChange={(e) => setAiAssistantInput(e.target.value)}
+                                    placeholder="Ask for a hint..."
+                                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none placeholder:text-white/25 focus:border-cyan-500/30"
+                                />
+                                <button
+                                    type="submit"
+                                    className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-[10px] font-medium uppercase tracking-widest text-cyan-200 transition-colors hover:bg-cyan-500/20"
+                                >
+                                    Send
+                                </button>
+                            </form>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setAiAssistantOpen(true)}
+                            className="ml-auto flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-black/90 px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-cyan-200 shadow-2xl transition-colors hover:bg-cyan-500/10"
+                        >
+                            <span className="rounded border border-cyan-500/30 px-1.5 py-0.5 text-[9px]">👾+-----------------------------------------------------------------------------------</span>
+                            FRIEND OR FOE
+                        </button>
+                    )}
+                </div>
+            )}
 
             {/* ── Pre-game briefing overlay ── */}
             {showBriefing && (
