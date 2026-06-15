@@ -956,9 +956,9 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
 
     // ─── Render ───────────────────────────────────────────────────────────────
     return (
-        <div className="flex h-screen w-full flex-col overflow-hidden bg-black/30">
+        <div className="flex min-h-screen w-full flex-col overflow-x-hidden overflow-y-auto bg-black/30 pb-24">
             {/* ── Header ── */}
-            <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-6">
+            <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-black/85 px-6 backdrop-blur-md">
                 <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
                         <span className="text-xs font-bold text-cyan-400">{id}</span>
@@ -1013,9 +1013,9 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                 </div>
             </header>
 
-            <div className="flex min-h-0 flex-1 overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
                 {/* ── Chat sidebar ── */}
-                <aside className="flex w-72 shrink-0 flex-col border-r border-white/10 bg-black/20 relative z-[60]">
+                <aside className="relative z-[60] flex w-full shrink-0 flex-col border-b border-white/10 bg-black/20 xl:w-72 xl:border-b-0 xl:border-r">
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
                         {messages.map((msg, idx) => (
                             <ChatMessage key={idx} user={msg.user} text={msg.text} time={msg.time} />
@@ -1039,7 +1039,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                 </aside>
 
                 {/* ── Main workspace ── */}
-                <main className="flex-1 flex flex-col overflow-hidden bg-[#080808]/60">
+                <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#080808]/60">
                     {!isCompiler ? (
                         <>
                             <div className="flex items-center gap-1 border-b border-white/10 bg-black/40 px-4 py-2 overflow-x-auto">
@@ -1089,7 +1089,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                     👁 Live
                                 </button>
                             </div>
-                            <div className="flex-1 p-6 overflow-hidden flex flex-col gap-4">
+                            <div className="flex-1 flex flex-col gap-4 overflow-hidden p-6">
                                 {activeWindow === 'live' ? (
                                     <div className="flex-1 flex flex-col overflow-hidden rounded-xl border border-white/10 shadow-2xl">
                                         <div className="flex items-center gap-2 border-b border-white/10 bg-black/40 px-4 py-2 shrink-0 flex-wrap">
@@ -1190,7 +1190,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                 </main>
 
                 {/* ── Tasks / imposter sidebar ── */}
-                <aside className="flex w-64 shrink-0 flex-col border-l border-white/10 bg-black/20">
+                <aside className="flex w-full shrink-0 flex-col border-t border-white/10 bg-black/20 xl:w-64 xl:border-l xl:border-t-0 xl:overflow-y-auto">
                     <LiveActivityPanel
                         awareness={awareness}
                         localClientId={localAwarenessClientId}
@@ -1207,7 +1207,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
 
                     {isImposter ? (
                         /* ── Imposter sabotage panel ── */
-                        <div className="flex flex-col gap-3 p-4 flex-1">
+                        <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto p-4">
                             <p className="text-[9px] uppercase tracking-widest text-red-400/50 leading-relaxed">
                                 Select a sabotage type and execute.
                             </p>
@@ -1311,7 +1311,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                     ) : (
                         /* ── Crewmate task checklist ── */
                         <>
-                            <ul className="flex-1 overflow-y-auto p-3 space-y-2">
+                            <ul className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
                                 {tasks.map((task) => (
                                     <li key={task.id} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5">
                                         <button
@@ -1339,14 +1339,14 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                 </aside>
             </div>
 
-            {isDeveloper && (
+            {(isDeveloper || isImposter) && (
                 <div className="fixed bottom-4 right-4 z-40 w-[min(22rem,calc(100vw-2rem))]">
                     {aiAssistantOpen ? (
                         <div className="overflow-hidden rounded-xl border border-cyan-500/25 bg-black/95 shadow-2xl shadow-cyan-950/30">
                             <div className="flex items-center justify-between border-b border-white/10 bg-cyan-500/10 px-4 py-3">
                                 <div className="min-w-0">
                                     <p className="text-[10px] font-semibold uppercase tracking-widest text-cyan-300">Nexus</p>
-                                    <p className="text-[9px] uppercase tracking-widest text-white/30">Dev support channel</p>
+                                    <p className="text-[9px] uppercase tracking-widest text-white/30">AI support channel</p>
                                 </div>
                                 <button
                                     type="button"
