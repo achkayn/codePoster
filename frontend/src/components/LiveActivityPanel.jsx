@@ -58,7 +58,7 @@ const LiveActivityPanel = ({ awareness, localClientId, gameActions = [] }) => {
     const hasContent = presence.length > 0 || gameActions.length > 0;
 
     return (
-        <div className="flex flex-col border-b border-white/10 shrink-0 max-h-48">
+        <div className="flex min-h-0 flex-col border-b border-white/10 shrink-0 max-h-64">
             <div className="shrink-0 px-4 py-2.5 border-b border-white/5">
                 <h2 className="text-[10px] font-light uppercase tracking-widest text-white/50">
                     Live Activity
