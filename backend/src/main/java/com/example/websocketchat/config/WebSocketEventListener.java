@@ -31,30 +31,31 @@ public class WebSocketEventListener {
     private final SimpMessageSendingOperations messagingTemplate;//Permet d’envoyer des messages à n’importe quelle destination STOMP depuis le serveur.
     private final UserRepository userRepository;
 
+
+    
+
     @EventListener
     public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
-        System.out.println("/testsetst");
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
+        String sessionId = headerAccessor.getSessionId();
 
-        if (headerAccessor.getSessionAttributes() == null) {
+        User user = userService.findBySessionId(sessionId);
+        if (user == null) {
             return;
         }
-        Map<String, Object> attrs = headerAccessor.getSessionAttributes();
-        String username = (String) attrs.get("username");
-        String roomId = attrs != null ? (String) attrs.get("waitingid") : null;
-        System.out.println("Disconnected from " + username + " room " + roomId);
-        if (username != null) {
-            log.info("user disconnected: {}", username);
+
+        String username = user.getUsername();
+        String roomId = user.getWaitingroomId();
+        log.info("user disconnected: {} room {}", username, roomId);
+
+        userService.deleteBySessionId(sessionId);
+
+        if (roomId != null) {
             var chatMessage = ChatMessage.builder()
                     .type(ChatMessage.MsgType.LEAVE)
                     .sender(username)
                     .build();
-            if (roomId != null) {
-                userRepository.deleteByUsernameAndWaitingroomId(username, roomId);
-                messagingTemplate.convertAndSend("/topic/waiting/" + roomId, chatMessage);
-            } else {
-                userRepository.deleteByUsername(username);
-            }
+            messagingTemplate.convertAndSend("/topic/waiting/" + roomId, chatMessage);
         }
     }
     /*@EventListener
