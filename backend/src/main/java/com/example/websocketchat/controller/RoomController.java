@@ -25,8 +25,6 @@ public class RoomController {
     private final userService userService;
     private final MessagingService messagingService;
 
-    // ─── Room lifecycle ──────────────────────────────────────────────────────
-
     @MessageMapping("/createRoom/{roomId}")
     public void createRoom(
             @Payload ChatMessage message,
@@ -35,13 +33,12 @@ public class RoomController {
     ) {
         String sessionId = headers.getSessionId();
         Principal user = headers.getUser();
-        String principalId= (user !=null)? user.getName():null;
+        String principalId = (user != null) ? user.getName() : null;
         headers.getSessionAttributes().put("sessionid", sessionId);
-        System.out.println("testing to see diff "+"\n" + message.getDifficulty());
+        System.out.println("testing to see diff " + "\n" + message.getDifficulty());
         if (userService.checkExistingRoom(roomId)) {
             System.out.println("Room already exists");
-           /* messagingService.sendToUserOne(principalId, "/queue/errors", "Room already exists");
-            */messagingService.sendError(message.getSender(), "You can't create room" + roomId);
+            messagingService.sendError(message.getSender(), "You can't create room" + roomId);
         } else {
             User owner = new User(null, message.getSender(), roomId, false, false, true, sessionId);
             userService.save(owner);
@@ -63,14 +60,12 @@ public class RoomController {
                 roomService.addUserToRoom(roomId, message.getSender(), sessionId);
 
         switch (result) {
-            case ROOM_NOT_FOUND     -> messagingService.sendError(message.getSender(), "Room doesn't exist");
-            case ROOM_FULL          -> messagingService.sendError(message.getSender(), "Room is full");
+            case ROOM_NOT_FOUND -> messagingService.sendError(message.getSender(), "Room doesn't exist");
+            case ROOM_FULL -> messagingService.sendError(message.getSender(), "Room is full");
             case DUPLICATE_USERNAME -> messagingService.sendError(message.getSender(), "Username already taken");
-            case OK                 -> messagingService.sendToTopic("/topic/room/" + roomId, message);
+            case OK -> messagingService.sendToTopic("/topic/room/" + roomId, message);
         }
     }
-
-    // ─── In-game chat ────────────────────────────────────────────────────────
 
     @MessageMapping("/room/{roomId}/chat")
     @SendTo("/topic/room/{roomId}")
@@ -81,14 +76,11 @@ public class RoomController {
         return message;
     }
 
-    // ─── Task completion ─────────────────────────────────────────────────────
-
     @MessageMapping("/room/{roomId}/task")
     public void handleTask(
             @Payload ChatMessage message,
             @DestinationVariable String roomId
     ) {
-        // Broadcast progress update so other players can see it
         messagingService.sendToTopic("/topic/room/" + roomId, message);
 
         if (message.getType() == ChatMessage.MsgType.TASK_COMPLETE) {
@@ -96,8 +88,6 @@ public class RoomController {
                     .ifPresent(gameOver -> messagingService.sendToTopic("/topic/room/" + roomId, gameOver));
         }
     }
-
-    // ─── Voting ──────────────────────────────────────────────────────────────
 
     @MessageMapping("/room/{roomId}/vote")
     public void handleVote(
@@ -107,44 +97,24 @@ public class RoomController {
         roomService.handleVote(roomId, message);
     }
 
-    // ─── Sabotage (imposter) ─────────────────────────────────────────────────
-
-   /* @MessageMapping("/room/{roomId}/sabotage")
-    @SendTo("/topic/room/{roomId}")
-    public ChatMessage handleSabotage(
+    @MessageMapping("/room/{roomId}/sabotage")
+    public void handleSabotaging(
             @Payload ChatMessage message,
             @DestinationVariable String roomId
     ) {
+        String userSabotaged = message.getTarget();
+        List<User> list = userService.findByRoom(roomId);
+        if (userSabotaged == null) {
+            Random rand = new Random();
+            int randomNum = rand.nextInt(3);
+            User user = list.get(randomNum);
+            String username = user.getUsername();
+            messagingService.sendToUser(username, "/queue/room/" + roomId + "/sabotage", message);
+            return;
+        }
 
-        return message;
-    }*/
-   @MessageMapping("/room/{roomId}/sabotage")//to implement in service instead of controller
-  /* @SendTo("/topic/room/{roomId}")*/
-   public void handleSabotaging(
-           @Payload ChatMessage message  /*should be type sabotage in frontend    */,
-           @DestinationVariable String roomId
-         /*  @Payload Sabotage sabotage,
-           @Payload String userSabotaged /* username of the sabotaged player*/
-   ) {
-       String userSabotaged=message.getTarget();
-       System.out.println("message"+"\n"+userSabotaged);
-       List<User> list = userService.findByRoom(roomId);
-       System.out.println("sabotage"+message.getSabotage());
-       if(userSabotaged==null){
-        Random rand = new Random();
-        int randomNum=rand.nextInt(3);
-        User user = list.get(randomNum);
-        String username = user.getUsername();
-        System.out.println(user);
-
-        messagingService.sendToUser(username, "/queue/room/" + roomId + "/sabotage", message);
-        return;
-       }
-
-       messagingService.sendToUser(userSabotaged, "/queue/room/" + roomId + "/sabotage", message);
-   }
-
-    // ─── Emergency meeting (vote notification) ─────────────────────────────────────
+        messagingService.sendToUser(userSabotaged, "/queue/room/" + roomId + "/sabotage", message);
+    }
 
     @MessageMapping("/room/{roomId}/emergency")
     @SendTo("/topic/room/{roomId}")
@@ -155,23 +125,33 @@ public class RoomController {
         return message;
     }
 
-    // ─── Compile Vote ─────────────────────────────────────
     @MessageMapping("/room/{roomId}/compile-vote-start")
     @SendTo("/topic/room/{roomId}")
-    public ChatMessage handleCompileVoteStart (
+    public ChatMessage handleCompileVoteStart(
             @Payload ChatMessage message,
             @DestinationVariable String roomId
     ) {
         return message;
     }
+
     @MessageMapping("/room/{roomId}/compile-vote")
     @SendTo("/topic/room/{roomId}")
-    public ChatMessage handleCompileVoteCast(   @Payload ChatMessage message,
-                                                @DestinationVariable String roomId) {
-       return message;
+    public ChatMessage handleCompileVoteCast(
+            @Payload ChatMessage message,
+            @DestinationVariable String roomId
+    ) {
+        return message;
     }
 
-    // ─── Live code broadcast ──────────────────────────────────────────────────
+    @MessageMapping("/room/{roomId}/compile")
+    @SendTo("/topic/room/{roomId}")
+    public ChatMessage handleCompile(
+            @Payload ChatMessage message,
+            @DestinationVariable String roomId
+    ) {
+        return message;
+    }
+
     @MessageMapping("/room/{roomId}/code")
     @SendTo("/topic/room/{roomId}")
     public ChatMessage handleCodeUpdate(
@@ -180,13 +160,6 @@ public class RoomController {
     ) {
         return message;
     }
-
-
-
-
-
-
-    // ─── Game over (timer expired) ───────────────────────────────────────────
 
     @MessageMapping("/room/{roomId}/game-over")
     public void handleGameOver(

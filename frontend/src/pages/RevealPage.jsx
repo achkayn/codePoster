@@ -148,7 +148,7 @@ const RevealPage = () => {
                                     <div className="grid grid-cols-3 gap-3">
                                         {[
                                             {
-                                                label: 'Tasks Done',
+                                                label: 'Mini Tasks Done',
                                                 val: myStats.tasksCompleted?.length ?? 0,
                                                 color: 'text-emerald-400'
                                             },

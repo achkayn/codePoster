@@ -58,6 +58,8 @@ public class StompAnalyticsInterceptor implements ChannelInterceptor {
             if (destination.endsWith("/task")) {
                 if (chatMessage.getType() == ChatMessage.MsgType.TASK_COMPLETE) {
                     analyticsService.record("TASK_COMPLETE", roomId, username, chatMessage.getContent());
+                } else if (chatMessage.getType() == ChatMessage.MsgType.TASK_STEP_COMPLETE) {
+                    analyticsService.record("TASK_STEP_COMPLETE", roomId, username, chatMessage.getContent());
                 }
             } else if (destination.endsWith("/vote")) {
                 analyticsService.record("VOTE_CAST", roomId, username, "voted_for=" + chatMessage.getContent());

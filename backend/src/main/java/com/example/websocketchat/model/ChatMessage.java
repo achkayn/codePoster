@@ -25,7 +25,10 @@ public class ChatMessage {
         CODE_UPDATE,
         EMERGENCY_MEETING,
         COMPILE_VOTE_START,
-        COMPILE_VOTE_CAST
+        COMPILE_VOTE_CAST,
+        COMPILE_RUNNING,
+        COMPILE_RESULTS,
+        TASK_STEP_COMPLETE
 
     }
 
