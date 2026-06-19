@@ -32,7 +32,7 @@ public class WebSocketEventListener {
     private final UserRepository userRepository;
 
 
-    
+
 
     @EventListener
     public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {

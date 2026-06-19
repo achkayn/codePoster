@@ -39,17 +39,63 @@ const RevealPage = () => {
 
     useEffect(() => {
         if (!roomId || !showContent) return;
-        setLoadingStats(true);
-        const timer = setTimeout(() => {
-            fetch(`http://localhost:8080/api/analytics/session/${roomId}`)
-                .then(res => res.ok ? res.json() : null)
-                .then(data => {
+        let cancelled = false;
+        const controller = new AbortController();
+        const maxAttempts = 10;
+        const retryDelayMs = 1500;
+
+        const loadSession = async (attempt = 1) => {
+            try {
+                const res = await fetch(`http://localhost:8080/api/analytics/session/${roomId}`, {
+                    signal: controller.signal,
+                });
+
+                if (cancelled) return;
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (cancelled) return;
                     setSession(data);
                     setLoadingStats(false);
-                })
-                .catch(() => setLoadingStats(false));
-        }, 2000);
-        return () => clearTimeout(timer);
+                    return;
+                }
+
+                if (res.status === 404 && attempt < maxAttempts) {
+                    setTimeout(() => {
+                        if (!cancelled) {
+                            loadSession(attempt + 1);
+                        }
+                    }, retryDelayMs);
+                    return;
+                }
+
+                setLoadingStats(false);
+            } catch {
+                if (cancelled || controller.signal.aborted) return;
+                if (attempt < maxAttempts) {
+                    setTimeout(() => {
+                        if (!cancelled) {
+                            loadSession(attempt + 1);
+                        }
+                    }, retryDelayMs);
+                    return;
+                }
+                setLoadingStats(false);
+            }
+        };
+
+        const loadingTimer = setTimeout(() => {
+            if (!cancelled) {
+                setLoadingStats(true);
+            }
+        }, 0);
+        loadSession();
+
+        return () => {
+            cancelled = true;
+            controller.abort();
+            clearTimeout(loadingTimer);
+        };
     }, [roomId, showContent]);
 
     const isVictory = outcome === 'victory';
