@@ -6,7 +6,7 @@ const FILE_KEYS = ['neural_hash', 'data_sort', 'auth_check', 'key_rotation', 'gr
 
 const YjsRoomContext = createContext(null);
 
-export function YjsRoomProvider({ roomId, username, initialCode = {}, children }) {
+export function YjsRoomProvider({ roomId, username, initialCode = {}, fileKeys = FILE_KEYS, children }) {
     const [ready, setReady] = useState(false);
     const [ydoc, setYdoc] = useState(null);
     const [awareness, setAwareness] = useState(null);
@@ -16,6 +16,7 @@ export function YjsRoomProvider({ roomId, username, initialCode = {}, children }
     useEffect(() => {
         if (!roomId) return;
 
+        const keys = fileKeys.length ? fileKeys : FILE_KEYS;
         const doc = new Y.Doc();
         const provider = new WebrtcProvider(`cp-room-${roomId}`, doc, {
             signaling: ['wss://signaling.yjs.dev'],
@@ -31,7 +32,7 @@ export function YjsRoomProvider({ roomId, username, initialCode = {}, children }
         const seedAll = () => {
             if (seededRef.current) return;
             let anyEmpty = false;
-            FILE_KEYS.forEach((key) => {
+            keys.forEach((key) => {
                 if (doc.getText(key).length === 0) anyEmpty = true;
             });
             if (!anyEmpty) {
@@ -40,7 +41,7 @@ export function YjsRoomProvider({ roomId, username, initialCode = {}, children }
             }
             seededRef.current = true;
             doc.transact(() => {
-                FILE_KEYS.forEach((key) => {
+                keys.forEach((key) => {
                     const ytext = doc.getText(key);
                     if (ytext.length === 0 && initialCode[key]) {
                         ytext.insert(0, initialCode[key]);
@@ -51,7 +52,7 @@ export function YjsRoomProvider({ roomId, username, initialCode = {}, children }
 
         const timer = setTimeout(seedAll, 600);
         const onSynced = () => {
-            const hasContent = FILE_KEYS.some((key) => doc.getText(key).length > 0);
+            const hasContent = keys.some((key) => doc.getText(key).length > 0);
             if (hasContent) seededRef.current = true;
             else seedAll();
         };
@@ -68,17 +69,17 @@ export function YjsRoomProvider({ roomId, username, initialCode = {}, children }
             setAwareness(null);
             setReady(false);
         };
-    }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [roomId, fileKeys, initialCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const getYText = useCallback((fileKey) => {
         if (!ydoc) return null;
         return ydoc.getText(fileKey);
-    }, [ydoc]);
+    }, [ydoc, fileKeys]);
 
     const resetAllFiles = useCallback((codeMap) => {
         if (!ydoc) return;
         ydoc.transact(() => {
-            FILE_KEYS.forEach((key) => {
+            (fileKeys.length ? fileKeys : FILE_KEYS).forEach((key) => {
                 const ytext = ydoc.getText(key);
                 const code = codeMap[key] ?? '';
                 if (ytext.length > 0) ytext.delete(0, ytext.length);
@@ -95,9 +96,9 @@ export function YjsRoomProvider({ roomId, username, initialCode = {}, children }
             awareness,
             getYText,
             resetAllFiles,
-            fileKeys: FILE_KEYS,
+            fileKeys: fileKeys.length ? fileKeys : FILE_KEYS,
         }),
-        [ready, ydoc, awareness, getYText, resetAllFiles]
+        [ready, ydoc, awareness, getYText, resetAllFiles, fileKeys]
     );
 
     return (

@@ -81,7 +81,8 @@ public class SessionAggregationService {
                                 ));
 
                         List<String> tasksCompleted = events.stream()
-                                .filter(e -> "TASK_COMPLETE".equals(e.getEventType())
+                                .filter(e -> ("TASK_COMPLETE".equals(e.getEventType())
+                                        || "TASK_STEP_COMPLETE".equals(e.getEventType()))
                                         && username.equals(e.getUsername()))
                                 .flatMap(e -> Arrays.stream(e.getPayload() != null
                                         ? e.getPayload().split(",") : new String[]{}))

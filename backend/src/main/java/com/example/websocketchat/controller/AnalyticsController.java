@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
 @RestController
 @RequestMapping("/api/analytics")
 @RequiredArgsConstructor
-//@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "http://localhost:5173/")
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;

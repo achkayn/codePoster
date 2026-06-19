@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { Button } from '../components/ui/platform-components';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import YjsCodeEditor from '../components/YjsCodeEditor';
@@ -107,6 +107,48 @@ const INITIAL_TASKS = [
 ];
 
 const TASK_KEYS = ['neural_hash', 'data_sort', 'auth_check', 'key_rotation', 'grid_scan'];
+
+const FALLBACK_TASK_PLAN = {
+    tasks: INITIAL_TASKS.map((task, index) => ({
+        key: TASK_KEYS[index],
+        title: task.label,
+        description: task.label,
+        starterCode: INITIAL_CODE[TASK_KEYS[index]] ?? '',
+        difficulty: 1,
+        miniTaskLabel: task.label,
+    })),
+    initialCode: INITIAL_CODE,
+};
+
+const buildTaskState = (tasks = []) => tasks.map((task, index) => ({
+    id: task.key ?? index + 1,
+    key: task.key ?? TASK_KEYS[index] ?? `task-${index + 1}`,
+    label: task.miniTaskLabel ?? task.title ?? task.label ?? task.key ?? `Task ${index + 1}`,
+    done: false,
+}));
+
+const buildInitialCodeMap = (tasks = [], initialCode = {}) => (
+    tasks.reduce((acc, task, index) => {
+        const key = task.key ?? TASK_KEYS[index] ?? `task-${index + 1}`;
+        acc[key] = task.starterCode ?? initialCode[key] ?? '';
+        return acc;
+    }, {})
+);
+
+const buildZeroMap = (keys = []) => Object.fromEntries(keys.map(key => [key, 0]));
+
+const parseTaskIds = (content) => {
+    if (Array.isArray(content)) {
+        return content.map(value => String(value).trim()).filter(Boolean);
+    }
+    if (content == null || content === '') {
+        return [];
+    }
+    return String(content ?? '')
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean);
+};
 
 // ─── Sabotage ability definitions ─────────────────────────────────────────────
 const SABOTAGE_TYPES = [
@@ -302,7 +344,7 @@ const CompilerView = () => {
     );
 };
 
-function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = false }) {
+function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = false, taskPlan = FALLBACK_TASK_PLAN }) {
     const { id } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
@@ -314,38 +356,45 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
     const isImposter = role.toLowerCase() === 'imposter';
     const isCompiler = role.toLowerCase() === 'compiler';
     const isDeveloper = !isImposter;
+    const taskCatalog = taskPlan?.tasks?.length ? taskPlan.tasks : FALLBACK_TASK_PLAN.tasks;
+    const taskKeys = useMemo(() => taskCatalog.map(task => task.key), [taskCatalog]);
+    const initialCodeByKey = useMemo(
+        () => buildInitialCodeMap(taskCatalog, taskPlan?.initialCode ?? FALLBACK_TASK_PLAN.initialCode),
+        [taskCatalog, taskPlan?.initialCode]
+    );
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [players,      setPlayers]      = useState([]);
-    const [tasks,        setTasks]        = useState(INITIAL_TASKS);
-    const [activeWindow, setActiveWindow] = useState('neural_hash');
-    const activeWindowRef = useRef('neural_hash');
+    const [tasks,        setTasks]        = useState(() => buildTaskState(taskCatalog));
+    const [activeWindow, setActiveWindow] = useState(taskKeys[0] ?? 'neural_hash');
+    const activeWindowRef = useRef(taskKeys[0] ?? 'neural_hash');
     const [chosenPlayer, setChosenPlayer] = useState('');
 
     const fileEnterTimeRef = useRef(Date.now());
-    const timePerFileRef = useRef({
-        neural_hash: 0,
-        data_sort: 0,
-        auth_check: 0,
-        key_rotation: 0,
-        grid_scan: 0,
-    });
+    const timePerFileRef = useRef(buildZeroMap(taskKeys));
 
     const [messages,  setMessages]  = useState([
         { user: 'SYSTEM', text: 'Neural link established. Encryption active.', time: '00:00' }
     ]);
     const [chatInput, setChatInput] = useState('');
-    const messagesEndRef = useRef(null);
+    const messagesListRef = useRef(null);
+    const isChatPinnedToBottomRef = useRef(true);
     const [aiAssistantOpen, setAiAssistantOpen] = useState(isDeveloper);
     const [aiAssistantInput, setAiAssistantInput] = useState('');
     const [aiAssistantMessages, setAiAssistantMessages] = useState(INITIAL_AI_MESSAGES);
-    const keystrokesPerFileRef = useRef({
-        neural_hash: 0,
-        data_sort: 0,
-        auth_check: 0,
-        key_rotation: 0,
-        grid_scan: 0,
-    });
+    const keystrokesPerFileRef = useRef(buildZeroMap(taskKeys));
+    const taskCompleteSentRef = useRef(false);
+    const markTasksDone = useCallback((taskIds) => {
+        const doneIds = new Set(parseTaskIds(taskIds));
+        if (!doneIds.size) return;
+        setTasks(prev => prev.map(task => (
+            doneIds.has(task.key) ? { ...task, done: true } : task
+        )));
+    }, []);
+    const resetTaskChecklist = useCallback(() => {
+        setTasks(buildTaskState(taskCatalog));
+        taskCompleteSentRef.current = false;
+    }, [taskCatalog]);
 
     // Timer
     const [timeLeft,  setTimeLeft]  = useState(GAME_DURATION);
@@ -374,11 +423,10 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
 
     // Task progress from other crewmates
     const [crewmateDoneCount, setCrewmateDoneCount] = useState(0);
-    const taskCompleteSentRef = useRef(false);
 
     // Live code viewing (Yjs)
     const [watchingPlayer, setWatchingPlayer] = useState(null);
-    const [liveActiveFile, setLiveActiveFile] = useState('neural_hash');
+    const [liveActiveFile, setLiveActiveFile] = useState(taskKeys[0] ?? 'neural_hash');
 
     // Live activity feed (game actions + awareness)
     const [gameActions, setGameActions] = useState([]);
@@ -387,6 +435,18 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
     const addGameAction = useCallback((text) => {
         setGameActions(prev => [{ text, time: Date.now() }, ...prev].slice(0, 24));
     }, []);
+
+    useEffect(() => {
+        setTasks(buildTaskState(taskCatalog));
+        const firstTaskKey = taskKeys[0] ?? 'neural_hash';
+        setActiveWindow(firstTaskKey);
+        activeWindowRef.current = firstTaskKey;
+        setLiveActiveFile(firstTaskKey);
+        fileEnterTimeRef.current = Date.now();
+        timePerFileRef.current = buildZeroMap(taskKeys);
+        keystrokesPerFileRef.current = buildZeroMap(taskKeys);
+        taskCompleteSentRef.current = false;
+    }, [taskCatalog, taskKeys]);
 
     // Publish active tab / file to shared awareness
     useEffect(() => {
@@ -486,9 +546,13 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
         setCompileRunning(true);
         setCompileLogs([]);
         setShowCompileResults(false);
-        addSystemMessage('⚙ Compile vote passed — running tests on all modules...');
+        send(`/app/room/${id}/compile`, {}, JSON.stringify({
+            sender: username,
+            type: 'COMPILE_RUNNING',
+            content: 'Compile running',
+        }));
+        addSystemMessage('⚙ Compile vote passed — running tests on the shared file tasks...');
 
-        const taskKeys = TASK_KEYS;
         const results = {};
 
         for (let i = 0; i < taskKeys.length; i++) {
@@ -511,7 +575,14 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                 });
                 const verdict = await response.text();
                 results[taskId] = verdict.split('\n')[0].trim();
-            } catch (err) {
+                if (results[taskId] === 'ACCEPTED') {
+                    send(`/app/room/${id}/task`, {}, JSON.stringify({
+                        sender: username,
+                        type: 'TASK_STEP_COMPLETE',
+                        content: taskId,
+                    }));
+                }
+            } catch {
                 results[taskId] = 'RUNTIME_ERROR';
             }
 
@@ -521,17 +592,22 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
             ]);
         }
 
-        setCompileLogs(prev => [...prev, '[OK] All modules tested.']);
+        setCompileLogs(prev => [...prev, '[OK] All shared file tasks tested.']);
         setCompileRunning(false);
         setCompileResults(results);
         setShowCompileResults(true);
+        send(`/app/room/${id}/compile`, {}, JSON.stringify({
+            sender: username,
+            type: 'COMPILE_RESULTS',
+            content: JSON.stringify({ results }),
+        }));
         addSystemMessage('Build report ready. Check the Compile Results panel.');
 
         setTasks(prev => prev.map((task, i) => {
             const taskId = taskKeys[i];
             return results[taskId] === 'ACCEPTED' ? { ...task, done: true } : task;
         }));
-    }, [addSystemMessage, getYText, id, username]);
+    }, [addSystemMessage, getYText, id, send, taskKeys, username]);
 
     // ── Resolve compile vote: tally and decide ────────────────────────────────
     const resolveCompileVote = useCallback((votes, allPlayers) => {
@@ -635,6 +711,15 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                         setCrewmateDoneCount(c => c + 1);
                         addSystemMessage(`${body.sender} completed all tasks!`);
                     }
+                    markTasksDone(body.content);
+                    break;
+
+                case 'TASK_STEP_COMPLETE':
+                    addGameAction(`${body.sender} cleared ${body.content}`);
+                    markTasksDone(body.content);
+                    if (body.sender !== username) {
+                        addSystemMessage(`${body.sender} completed ${body.content}.`);
+                    }
                     break;
 
                 case 'BLACKOUT':
@@ -664,11 +749,10 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                     break;
 
                 case 'RESET':
-                    resetAllFiles(INITIAL_CODE);
+                    resetAllFiles(initialCodeByKey);
                     addGameAction(`${body.sender} executed Reset — code wiped`);
                     if (!isImposter) {
-                        setTasks(INITIAL_TASKS.map(t => ({ ...t, done: false })));
-                        taskCompleteSentRef.current = false;
+                        resetTaskChecklist();
                         addSystemMessage('💀 RESET — all code files wiped back to starter!');
                     }
                     break;
@@ -744,6 +828,37 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                     });
                     break;
 
+                case 'COMPILE_RUNNING':
+                    setCompileVoteOpen(false);
+                    setCompileRunning(true);
+                    setCompileLogs([]);
+                    setShowCompileResults(false);
+                    if (body.sender !== username) {
+                        addGameAction(`${body.sender} started the compile run`);
+                        addSystemMessage(`${body.sender} started compiling the shared files.`);
+                    }
+                    break;
+
+                case 'COMPILE_RESULTS': {
+                    const payload = (() => {
+                        try {
+                            return JSON.parse(body.content || '{}');
+                        } catch {
+                            return {};
+                        }
+                    })();
+                    const results = payload.results || {};
+                    setCompileRunning(false);
+                    setCompileResults(results);
+                    setShowCompileResults(true);
+                    setCompileLogs(prev => prev.length ? prev : ['[OK] All shared file tasks tested.']);
+                    if (body.sender !== username) {
+                        addGameAction(`${body.sender} finished the compile run`);
+                        addSystemMessage(`${body.sender} finished compiling the shared files.`);
+                    }
+                    break;
+                }
+
                 default:
                     break;
             }
@@ -779,11 +894,10 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                     break;
 
                 case 'RESET':
-                    resetAllFiles(INITIAL_CODE);
+                    resetAllFiles(initialCodeByKey);
                     addGameAction(`${body.sender || 'Imposter'} executed Reset (targeted)`);
                     if (!isImposter) {
-                        setTasks(INITIAL_TASKS.map(t => ({ ...t, done: false })));
-                        taskCompleteSentRef.current = false;
+                        resetTaskChecklist();
                         addSystemMessage('💀 RESET (private)');
                     }
                     break;
@@ -814,13 +928,47 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
             if (sub) sub.unsubscribe();
             userSub.unsubscribe();
         };
-    }, [id, username, isConnected, subscribe, send, addSystemMessage, addGameAction, endGame, isImposter, players, resolveCompileVote, resetAllFiles]);
+    }, [
+        id,
+        username,
+        isConnected,
+        subscribe,
+        send,
+        addSystemMessage,
+        addGameAction,
+        endGame,
+        isImposter,
+        players,
+        resolveCompileVote,
+        resetAllFiles,
+        initialCodeByKey,
+        markTasksDone,
+        resetTaskChecklist,
+    ]);
 
-    // Auto-scroll chat
+    // Keep the chat pinned only while the user is already at the bottom.
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+        const container = messagesListRef.current;
+        if (!container) return;
 
+        const syncPinnedState = () => {
+            const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            isChatPinnedToBottomRef.current = distanceFromBottom < 80;
+        };
+
+        syncPinnedState();
+        container.addEventListener('scroll', syncPinnedState, { passive: true });
+        return () => container.removeEventListener('scroll', syncPinnedState);
+    }, []);
+
+    // Auto-scroll chat without moving the page.
+    useEffect(() => {
+        const container = messagesListRef.current;
+        if (!container) return;
+        if (isChatPinnedToBottomRef.current) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }, [messages]);
     // ── Task win condition ────────────────────────────────────────────────────
     useEffect(() => {
         if (isImposter) return;
@@ -829,7 +977,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
             taskCompleteSentRef.current = true;
             const completedTaskIds = tasks
                 .filter(t => t.done)
-                .map((_, i) => TASK_KEYS[i]);
+                .map(t => t.key);
             send(`/app/room/${id}/task`, {}, JSON.stringify({
                 sender: username,
                 type: 'TASK_COMPLETE',
@@ -852,7 +1000,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
 
         addGameAction(`You executed ${selectedSabotage.label}`);
         if (selectedSabotage.type === 'RESET') {
-            resetAllFiles(INITIAL_CODE);
+            resetAllFiles(initialCodeByKey);
         }
         startCooldown(selectedSabotage.type, selectedSabotage.cooldown);
         setSelectedSabotage(null);
@@ -943,20 +1091,18 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
         }
     };
 
-    const windows = [
-        { id: 'neural_hash',  title: 'neural_hash.py',  key: 'neural_hash'  },
-        { id: 'data_sort',    title: 'data_sort.py',    key: 'data_sort'    },
-        { id: 'auth_check',   title: 'auth_check.py',   key: 'auth_check'   },
-        { id: 'key_rotation', title: 'key_rotation.py', key: 'key_rotation' },
-        { id: 'grid_scan',    title: 'grid_scan.py',    key: 'grid_scan'    },
-    ];
+    const windows = taskCatalog.map(task => ({
+        id: task.key,
+        title: `${task.key}.py`,
+        key: task.key,
+    }));
 
     const tasksDone      = tasks.filter(t => t.done).length;
     const isTimeCritical = timeLeft <= 30;
 
     // ─── Render ───────────────────────────────────────────────────────────────
     return (
-        <div className="flex min-h-screen w-full flex-col overflow-x-hidden overflow-y-auto bg-black/30 pb-24">
+        <div className="flex h-screen w-full flex-col overflow-hidden bg-black/30 pb-24">
             {/* ── Header ── */}
             <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-black/85 px-6 backdrop-blur-md">
                 <div className="flex items-center gap-3">
@@ -1015,12 +1161,11 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
 
             <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
                 {/* ── Chat sidebar ── */}
-                <aside className="relative z-[60] flex w-full shrink-0 flex-col border-b border-white/10 bg-black/20 xl:w-72 xl:border-b-0 xl:border-r">
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <aside className="relative z-[60] flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-b border-white/10 bg-black/20 xl:w-72 xl:border-b-0 xl:border-r">
+                    <div ref={messagesListRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-4">
                         {messages.map((msg, idx) => (
                             <ChatMessage key={idx} user={msg.user} text={msg.text} time={msg.time} />
                         ))}
-                        <div ref={messagesEndRef} />
                     </div>
                     <div className="shrink-0 border-t border-white/10 p-4 bg-black/30">
                         <form onSubmit={handleSendMessage} className="relative">
@@ -1039,7 +1184,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                 </aside>
 
                 {/* ── Main workspace ── */}
-                <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#080808]/60">
+                <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#080808]/60">
                     {!isCompiler ? (
                         <>
                             <div className="flex items-center gap-1 border-b border-white/10 bg-black/40 px-4 py-2 overflow-x-auto">
@@ -1190,7 +1335,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                 </main>
 
                 {/* ── Tasks / imposter sidebar ── */}
-                <aside className="flex w-full shrink-0 flex-col border-t border-white/10 bg-black/20 xl:w-64 xl:border-l xl:border-t-0 xl:overflow-y-auto">
+                <aside className="flex min-h-0 w-full shrink-0 flex-col overflow-y-auto overscroll-contain border-t border-white/10 bg-black/20 xl:w-[22rem] xl:border-l xl:border-t-0">
                     <LiveActivityPanel
                         awareness={awareness}
                         localClientId={localAwarenessClientId}
@@ -1198,7 +1343,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                     />
                     <div className="shrink-0 border-b border-white/10 px-4 py-3 flex items-center justify-between">
                         <h2 className="text-[10px] font-light uppercase tracking-widest text-white/50">
-                            {isImposter ? 'Sabotage' : 'Tasks'}
+                            {isImposter ? 'Sabotage' : 'Mini Tasks'}
                         </h2>
                         {!isImposter && (
                             <span className="text-[10px] tabular-nums text-white/30">{tasksDone}/{tasks.length}</span>
@@ -1207,12 +1352,15 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
 
                     {isImposter ? (
                         /* ── Imposter sabotage panel ── */
-                        <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto p-4">
-                            <p className="text-[9px] uppercase tracking-widest text-red-400/50 leading-relaxed">
-                                Select a sabotage type and execute.
-                            </p>
+                        <div className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto p-5">
+                            <div className="rounded-xl border border-red-500/15 bg-red-500/5 px-4 py-3">
+                                <p className="text-[9px] uppercase tracking-[0.25em] text-red-300/70">Sabotage Console</p>
+                                <p className="mt-1 text-[10px] leading-relaxed text-white/45">
+                                    Select a sabotage, optionally pick a target, then trigger it when the cooldown clears.
+                                </p>
+                            </div>
 
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                                 {SABOTAGE_TYPES.map(s => {
                                     const cd = cooldowns[s.type];
                                     const onCooldown = cd > 0;
@@ -1223,7 +1371,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                             type="button"
                                             disabled={onCooldown}
                                             onClick={() => setSelectedSabotage(isSelected ? null : s)}
-                                            className={`relative w-full rounded-xl border px-4 py-3 text-left transition-all overflow-hidden ${
+                                            className={`relative w-full rounded-xl border px-4 py-4 text-left transition-all overflow-hidden ${
                                                 onCooldown
                                                     ? 'border-white/5 bg-white/[0.02] cursor-not-allowed'
                                                     : isSelected
@@ -1267,10 +1415,10 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                 })}
                             </div>
 
-                            <div className="space-y-1">
+                            <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-4">
                                 <label className="text-[9px] uppercase tracking-widest text-white/30">Target Player</label>
                                 <select
-                                    className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/70 outline-none focus:border-red-500/30"
+                                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-xs text-white/70 outline-none focus:border-red-500/30"
                                     value={chosenPlayer}
                                     onChange={(e) => setChosenPlayer(e.target.value)}
                                 >
@@ -1289,7 +1437,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                 type="button"
                                 disabled={!selectedSabotage || cooldowns[selectedSabotage?.type] > 0}
                                 onClick={handleSabotage}
-                                className={`w-full rounded-lg border py-3 text-xs font-medium uppercase tracking-widest transition-all ${
+                                className={`w-full rounded-xl border py-3.5 text-xs font-medium uppercase tracking-widest transition-all ${
                                     selectedSabotage && cooldowns[selectedSabotage.type] === 0
                                         ? 'border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 cursor-pointer'
                                         : 'border-white/5 bg-white/[0.02] text-white/20 cursor-not-allowed'
@@ -1401,7 +1549,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                             onClick={() => setAiAssistantOpen(true)}
                             className="ml-auto flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-black/90 px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-cyan-200 shadow-2xl transition-colors hover:bg-cyan-500/10"
                         >
-                            <span className="rounded border border-cyan-500/30 px-1.5 py-0.5 text-[9px]">👾+-----------------------------------------------------------------------------------</span>
+                            <span className="rounded border border-cyan-500/30 px-1.5 py-0.5 text-[9px]">👾</span>
                             FRIEND OR FOE
                         </button>
                     )}
@@ -1419,14 +1567,15 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                         <h2 className="text-2xl font-light uppercase tracking-[0.2em] text-cyan-400 mb-2">Mission Briefing</h2>
                         <p className="text-[10px] uppercase tracking-widest text-white/30 mb-6">Nexus Core — Emergency Protocol</p>
                         <div className="space-y-3 text-sm font-light text-white/70 leading-relaxed mb-8">
-                            <p>The primary <span className="text-cyan-400/90">Python neural modules</span> have been corrupted by an unknown intrusion vector.</p>
-                            <p>Your team must repair <span className="text-cyan-400/90">5 critical algorithms</span> before the 3-minute lockdown expires. Each agent works on their own isolated copy.</p>
-                            <ul className="list-disc list-inside space-y-1 text-white/45 text-xs font-mono">
-                                <li>neural_hash.py — implement secure_hash()</li>
-                                <li>data_sort.py — fix quicksort duplicate bug</li>
-                                <li>auth_check.py — implement token_verify()</li>
-                                <li>key_rotation.py — fix rotation direction</li>
-                                <li>grid_scan.py — implement pattern_match()</li>
+                            <p>The primary <span className="text-cyan-400/90">Python modules</span> have been corrupted by an unknown intrusion vector.</p>
+                            <p>Everyone shares the same file set in real time. The backend assigns each player a mini task, and the code you edit is synchronized across the room.</p>
+                            <ul className="max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2 text-white/45 text-xs font-mono">
+                                {taskCatalog.map((task) => (
+                                    <li key={task.key} className="flex items-start justify-between gap-4 rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+                                        <span>{task.key}.py</span>
+                                        <span className="text-white/25 text-right">{task.miniTaskLabel ?? task.title}</span>
+                                    </li>
+                                ))}
                             </ul>
                             <p className="text-red-400/80 border border-red-500/20 rounded-lg p-3 bg-red-500/5 text-xs">
                                 ⚠ WARNING: One agent among you is a hostile operative actively sabotaging the repair process. Trust no one.
@@ -1603,7 +1752,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                     {log}
                                 </div>
                             ))}
-                            {compileLogs.length < TASK_KEYS.length + 1 && (
+                            {compileLogs.length < taskKeys.length + 1 && (
                                 <div className="text-[11px] text-cyan-400/40 animate-pulse">_</div>
                             )}
                         </div>
@@ -1613,7 +1762,7 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                 className="h-full bg-cyan-500/60 transition-all duration-300"
                                 style={{
                                     width: `${Math.min(
-                                        (compileLogs.length / (TASK_KEYS.length + 1)) * 100,
+                                        (compileLogs.length / (taskKeys.length + 1)) * 100,
                                         100
                                     )}%`
                                 }}
@@ -1649,12 +1798,12 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                             </button>
                         </div>
                         <p className="text-[10px] uppercase tracking-widest text-white/30 mb-5">
-                            Runtime compilation results across all modules
+                            Runtime compilation results across the shared file tasks
                         </p>
 
                         {/* File rows */}
                         <div className="space-y-2 mb-5">
-                            {TASK_KEYS.map(taskId => {
+                            {taskKeys.map(taskId => {
                                 const verdict = compileResults[taskId] || 'PENDING';
                                 const isAccepted = verdict === 'ACCEPTED';
                                 const isTimeout = verdict === 'TIME_LIMIT_EXCEEDED';
@@ -1718,9 +1867,59 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
 
 export default function RoomPage(props) {
     const { id } = useParams();
+    const username = props.username || 'Player';
+    const [taskPlan, setTaskPlan] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        const controller = new AbortController();
+
+        fetch(`http://localhost:8080/api/tasks/room/${id}?username=${encodeURIComponent(username)}`, {
+            signal: controller.signal,
+        })
+            .then(res => (res.ok ? res.json() : Promise.reject(new Error('Failed to load task plan'))))
+            .then(data => {
+                if (!cancelled) setTaskPlan(data);
+            })
+            .catch(() => {
+                if (!cancelled) setTaskPlan(FALLBACK_TASK_PLAN);
+            });
+
+        return () => {
+            cancelled = true;
+            controller.abort();
+        };
+    }, [id, username]);
+
+    const resolvedTaskPlan = taskPlan || FALLBACK_TASK_PLAN;
+    const providerCodeMap = useMemo(
+        () => buildInitialCodeMap(resolvedTaskPlan.tasks, resolvedTaskPlan.initialCode),
+        [resolvedTaskPlan]
+    );
+    const providerFileKeys = useMemo(
+        () => resolvedTaskPlan.tasks.map(task => task.key),
+        [resolvedTaskPlan]
+    );
+
+    if (!taskPlan) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-black text-white">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-5 text-center">
+                    <p className="text-xs uppercase tracking-[0.25em] text-cyan-400/80">Loading task plan</p>
+                    <p className="mt-2 text-[10px] uppercase tracking-widest text-white/30">Pulling mini tasks from the backend...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <YjsRoomProvider roomId={id} username={props.username} initialCode={INITIAL_CODE}>
-            <RoomPageContent {...props} />
+        <YjsRoomProvider
+            roomId={id}
+            username={username}
+            initialCode={providerCodeMap}
+            fileKeys={providerFileKeys}
+        >
+            <RoomPageContent {...props} taskPlan={resolvedTaskPlan} />
         </YjsRoomProvider>
     );
 }
