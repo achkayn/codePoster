@@ -35,6 +35,8 @@ public class RoomController {
         Principal user = headers.getUser();
         String principalId = (user != null) ? user.getName() : null;
         headers.getSessionAttributes().put("sessionid", sessionId);
+        headers.getSessionAttributes().put("username", message.getSender());   // ADD THIS
+        headers.getSessionAttributes().put("waitingid", roomId);
         System.out.println("testing to see diff " + "\n" + message.getDifficulty());
         if (userService.checkExistingRoom(roomId)) {
             System.out.println("Room already exists");
@@ -55,7 +57,7 @@ public class RoomController {
         String sessionId = headers.getSessionId();
         headers.getSessionAttributes().put("username", message.getSender());
         headers.getSessionAttributes().put("sessionid", sessionId);
-
+        headers.getSessionAttributes().put("waitingid", roomId);
         RoomService.JoinResult result =
                 roomService.addUserToRoom(roomId, message.getSender(), sessionId);
 

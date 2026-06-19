@@ -62,5 +62,10 @@ public class userService {
     public User findBySessionId(String sessionId){
         return userRepository.findOneBySessionId(sessionId);
     }
-
+    public void deleteBySessionId(String sessionId) {
+        User user = userRepository.findOneBySessionId(sessionId);
+        if (user != null) {
+            userRepository.delete(user);
+        }
+    }
 }
