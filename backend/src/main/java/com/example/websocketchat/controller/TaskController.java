@@ -46,6 +46,7 @@ public class TaskController {
                         .key(task.getKey())
                         .title(task.getTitle())
                         .description(task.getDescription())
+                        .resourceUrl(task.getResourceUrl())
                         .starterCode(task.getStarterCode())
                         .difficulty(task.getDifficulty())
                         .miniTaskLabel(buildMiniTaskLabel(task))
@@ -88,6 +89,7 @@ public class TaskController {
             private String key;
             private String title;
             private String description;
+            private String resourceUrl;
             private String starterCode;
             private int difficulty;
             private String miniTaskLabel;

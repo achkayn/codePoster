@@ -369,6 +369,10 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
     const [activeWindow, setActiveWindow] = useState(taskKeys[0] ?? 'neural_hash');
     const activeWindowRef = useRef(taskKeys[0] ?? 'neural_hash');
     const [chosenPlayer, setChosenPlayer] = useState('');
+    const activeTask = useMemo(
+        () => taskCatalog.find(task => task.key === activeWindow) ?? null,
+        [taskCatalog, activeWindow]
+    );
 
     const fileEnterTimeRef = useRef(Date.now());
     const timePerFileRef = useRef(buildZeroMap(taskKeys));
@@ -434,6 +438,11 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
 
     const addGameAction = useCallback((text) => {
         setGameActions(prev => [{ text, time: Date.now() }, ...prev].slice(0, 24));
+    }, []);
+
+    const openTaskResource = useCallback((resourceUrl) => {
+        if (!resourceUrl) return;
+        window.open(resourceUrl, '_blank', 'noopener,noreferrer');
     }, []);
 
     useEffect(() => {
@@ -1234,6 +1243,36 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                     👁 Live
                                 </button>
                             </div>
+                            {activeWindow !== 'live' && activeTask && (
+                                <div className="border-b border-white/10 bg-black/30 px-4 py-3">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                        <div className="min-w-0">
+                                            <p className="text-[9px] uppercase tracking-[0.25em] text-white/35">Current Task</p>
+                                            <h3 className="truncate text-sm font-medium uppercase tracking-widest text-white/85">
+                                                {activeTask.title ?? activeTask.key}
+                                            </h3>
+                                            <p className="mt-1 max-w-3xl text-[10px] leading-relaxed text-white/40">
+                                                {activeTask.description}
+                                            </p>
+                                        </div>
+                                        <div className="flex shrink-0 items-center gap-2">
+                                            {activeTask.resourceUrl ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openTaskResource(activeTask.resourceUrl)}
+                                                    className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-cyan-300 hover:bg-cyan-500/20"
+                                                >
+                                                    Open resource
+                                                </button>
+                                            ) : (
+                                                <span className="text-[9px] uppercase tracking-widest text-white/20">
+                                                    No attachment
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             <div className="flex-1 flex flex-col gap-4 overflow-hidden p-6">
                                 {activeWindow === 'live' ? (
                                     <div className="flex-1 flex flex-col overflow-hidden rounded-xl border border-white/10 shadow-2xl">
@@ -1469,9 +1508,21 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                                         >
                                             {task.done && <span className="text-cyan-400 text-xs">✓</span>}
                                         </button>
-                                        <span className={`text-xs font-light ${task.done ? 'text-white/40 line-through' : 'text-white/80'}`}>
-                                            {task.label}
-                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <span className={`block truncate text-xs font-light ${task.done ? 'text-white/40 line-through' : 'text-white/80'}`}>
+                                                {task.label}
+                                            </span>
+                                            {task.resourceUrl && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openTaskResource(task.resourceUrl)}
+                                                    className="mt-1 inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.02] px-2 py-1 text-[9px] uppercase tracking-widest text-cyan-300/80 hover:border-cyan-500/30 hover:bg-cyan-500/10"
+                                                >
+                                                    <span>↗</span>
+                                                    Resource
+                                                </button>
+                                            )}
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
@@ -1572,8 +1623,25 @@ function RoomPageContent({ username = 'Player', isConnected: propsIsConnected = 
                             <ul className="max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2 text-white/45 text-xs font-mono">
                                 {taskCatalog.map((task) => (
                                     <li key={task.key} className="flex items-start justify-between gap-4 rounded-lg border border-white/5 bg-black/20 px-3 py-2">
-                                        <span>{task.key}.py</span>
-                                        <span className="text-white/25 text-right">{task.miniTaskLabel ?? task.title}</span>
+                                        <div className="min-w-0">
+                                            <span className="block">{task.key}.py</span>
+                                            <span className="block text-[9px] uppercase tracking-widest text-white/25">
+                                                {task.miniTaskLabel ?? task.title}
+                                            </span>
+                                        </div>
+                                        {task.resourceUrl ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => openTaskResource(task.resourceUrl)}
+                                                className="shrink-0 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[9px] uppercase tracking-widest text-cyan-300 hover:bg-cyan-500/20"
+                                            >
+                                                Open brief
+                                            </button>
+                                        ) : (
+                                            <span className="shrink-0 text-[9px] uppercase tracking-widest text-white/15">
+                                                No file
+                                            </span>
+                                        )}
                                     </li>
                                 ))}
                             </ul>
