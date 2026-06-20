@@ -23,6 +23,7 @@ public class Task {
     private String key;           // "caesar_cipher", "merge_sort" etc — matches frontend file key
     private String title;         // "Implement Caesar Cipher"
     private String description;   // shown in briefing
+    private String resourceUrl;   // optional PDF/image link explaining the task
 
     private String starterCode;   // what players start with (the buggy/empty version)
     private String solution;      // the correct reference solution
